@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Gobtractor": {
+      "commandName": "Project",
+      "commandLineArgs": "assets.gfc"
+    }
+  }
+}
