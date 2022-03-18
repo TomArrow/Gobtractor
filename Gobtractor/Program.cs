@@ -24,8 +24,14 @@ namespace Gobtractor
         class FileInfo
         {
             public string fileName;
+
+            public List<BlockInfo> blocks = new List<BlockInfo>();
+        }
+        class BlockInfo
+        {
             public int offset;
             public int length;
+            public int dummy;
         }
 
         static void extract(string file,string directory)
@@ -49,18 +55,27 @@ namespace Gobtractor
                     
                         int size = 0;
                         //while (16384 == dummy)
+                        FileInfo currentFile = new FileInfo(); 
                         while (size != -1)
                         {
                             size = br.ReadInt32();
                             int offset = br.ReadInt32();
                             int dummy = br.ReadInt32();
                             
-                            if(size != -1 && 16384 == dummy)
+                            if(size != -1)
                             {
-
+                                if (dummy == 16384)
+                                {
+                                    currentFile.blocks.Add(new BlockInfo { length = size, offset = offset, dummy=dummy });
+                                    list.Add(currentFile);
+                                    currentFile = new FileInfo();
+                                } else
+                                {
+                                    // Add to last one
+                                    currentFile.blocks.Add(new BlockInfo { length = size, offset = offset, dummy = dummy });
+                                }
                                 //sb.AppendLine($"File: size {size}, offset {offset}, dummy {dummy}");
 
-                                list.Add(new FileInfo() { length = size, offset = offset });
                             }
                             //Console.WriteLine($"File: size {size}, offset {offset}, dummy {dummy}");
                         }
@@ -113,16 +128,23 @@ namespace Gobtractor
 
                                 long lastLength = startOffset - lastStartOffset;
                                 lastStartOffset = startOffset;
-                                sb.AppendLine($"File: name {list[i].fileName}, size {list[i].length}, offset {list[i].offset}, lastlength {lastLength}");
-                                Console.WriteLine($"File: name {list[i].fileName}, size {list[i].length}, offset {list[i].offset}, lastlength {lastLength}");
 
+                                List<byte> decompressedFileData = new List<byte>();
+                                int index = 0;
+                                foreach(BlockInfo bi in list[i].blocks)
+                                {
+                                    br2.BaseStream.Seek(bi.offset, SeekOrigin.Begin);
+                                    byte[] fileContents = br2.ReadBytes(bi.length);
+                                    decompressedFileData.AddRange(DecompressFile(fileContents));
+                                    sb.AppendLine($"File: name {list[i].fileName}, fragment {index} , size {bi.length}, offset {bi.offset}, dummy {bi.dummy}, lastlength {lastLength}");
+                                    Console.WriteLine($"File: name {list[i].fileName}, fragment {index} , size {bi.length}, offset {bi.offset}, dummy {bi.dummy}, lastlength {lastLength}");
+                                    index++;
+                                }
 
-                                br2.BaseStream.Seek(list[i].offset,SeekOrigin.Begin);
-                                byte[] fileContents = br2.ReadBytes(list[i].length);
                                 string pathToSave = list[i].fileName.Replace(".\\", directory + "\\");
                                 string dirname = Path.GetDirectoryName(pathToSave);
                                 Directory.CreateDirectory(dirname);
-                                File.WriteAllBytes(pathToSave, DecompressFile(fileContents));
+                                File.WriteAllBytes(pathToSave, decompressedFileData.ToArray());
 
                                 br.BaseStream.Seek(startOffset+72,SeekOrigin.Begin);
 
